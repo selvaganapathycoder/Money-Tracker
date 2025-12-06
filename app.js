@@ -1,244 +1,345 @@
+
+
+onst storageCtrl = (function(){
+
+    const baseURL = "https://6933d59f4090fe3bf01e1f49.mockapi.io/transation/transation";
+
+    return {
+
+        async getItems(){
+            const res = await fetch(baseURL);
+            return await res.json();
+        },
+
+        async storeItem(item){
+            const res = await fetch(baseURL, {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify(item)
+            });
+            return await res.json();
+        },
+
+        async updateItem(id, item){
+            const res = await fetch(`${baseURL}/${id}`, {
+                method:"PUT",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify(item)
+            });
+            return await res.json();
+        },
+
+        async deleteItem(id){
+            await fetch(`${baseURL}/${id}`, { method:"DELETE" });
+        },
+
+        async clearAll(){
+            const list = await fetch(baseURL).then(r => r.json());
+            for(let i of list){
+                await fetch(`${baseURL}/${i.id}`, { method:"DELETE" });
+            }
+        }
+
+    };
+})();
+
+
+// ---------------------------------------------------------
 // ITEM CONTROLLER
-const itemCtrl = (() => {
+// ---------------------------------------------------------
+const itemCtrl = (function(){
 
-  const Item = function (id, name, money) {
-    this.id = id;
-    this.name = name;
-    this.money = money;
-  };
+    const data = {
+        items: [],
+        totalMoney: 0,
+        currentItem: null
+    };
 
-  const data = {
-    items: [
-      { id: 0, name: "Clothes", money: 10000 },
-      { id: 1, name: "Food", money: 5000 },
-      { id: 2, name: "Bike Service", money: 3000 },
-    ],
-    currentItem: null,
-    totalMoney: 0,
-  };
+    return {
 
-  return {
+        loadFromAPI: async function(){
+            const items = await storageCtrl.getItems();
+            data.items = items.map(i => ({
+                id: i.id,
+                name: i.name,
+                money: parseInt(i.money)
+            }));
+        },
 
-    getItems: () => data.items,
+        getItem(){
+            return data.items;
+        },
 
-    addItem(name, money) {
-      const id = data.items.length ? data.items[data.items.length - 1].id + 1 : 0;
+        async addItem(name, money){
+            money = parseInt(money);
 
-      money = Number(money);
-      const newItem = new Item(id, name, money);
-      data.items.push(newItem);
-      return newItem;
-    },
+            const newObj = { name, money };
+            const saved = await storageCtrl.storeItem(newObj);
 
-    updateItem(name, money) {
-      money = Number(money);
+            const newItem = {
+                id: saved.id,
+                name: saved.name,
+                money: parseInt(saved.money)
+            };
 
-      data.currentItem.name = name;
-      data.currentItem.money = money;
+            data.items.push(newItem);
+            return newItem;
+        },
 
-      return data.currentItem;
-    },
+        async updateItem(name, money){
+            money = parseInt(money);
 
-    deleteItem(id) {
-      data.items = data.items.filter(item => item.id !== id);
-    },
+            const current = data.currentItem;
 
-    clearAllItems() {
-      data.items = [];
-    },
+            current.name = name;
+            current.money = money;
 
-    setCurrentItem(item) {
-      data.currentItem = item;
-    },
+            await storageCtrl.updateItem(current.id, current);
 
-    getCurrentItem() {
-      return data.currentItem;
-    },
+            return current;
+        },
 
-    getTotalMoney() {
-      data.totalMoney = data.items.reduce((total, item) => total + item.money, 0);
-      return data.totalMoney;
-    },
+        async deleteItem(id){
+            data.items = data.items.filter(item => item.id !== id);
+            await storageCtrl.deleteItem(id);
+        },
 
-    getItemByID(id) {
-      return data.items.find(item => item.id === id);
-    }
-  };
+        async clearAllItems(){
+            data.items = [];
+            await storageCtrl.clearAll();
+        },
 
+        getItemByID(id){
+            return data.items.find(item => item.id === id);
+        },
+
+        setCurrentItem(item){
+            data.currentItem = item;
+        },
+
+        getCurrentItem(){
+            return data.currentItem;
+        },
+
+        getTotalMoney(){
+            let total = 0;
+            data.items.forEach(item => total += item.money);
+            data.totalMoney = total;
+            return total;
+        }
+
+    };
 })();
 
 
+// ---------------------------------------------------------
 // UI CONTROLLER
-const UICtrl = (() => {
+// ---------------------------------------------------------
+const UICtrl = (function(){
 
-  return {
+    return {
 
-    getInput: () => ({
-      name: document.querySelector("#name").value,
-      money: document.querySelector("#money").value
-    }),
+        populateItemList(items){
+            let html = "";
+            items.forEach(item => {
+                html += `
+                <li class="collection-item" id="item-${item.id}">
+                    <strong>${item.name}</strong> :
+                    <em>${item.money} Rs</em>
+                    <a href="#" class="secondary-content">
+                        <i class="fa-solid fa-pencil edit-item"></i>
+                    </a>
+                </li>`;
+            });
+            document.querySelector("#item-list").innerHTML = html;
+        },
 
-    populateList(items) {
-      document.querySelector("#item-list").innerHTML = items.map(item => `
-        <li class="collection-item" id="item-${item.id}">
-          <strong>${item.name}</strong> : 
-          <em>${item.money} Rs</em>
-          <a href="#" class="secondary-content">
-            <i class="fa-solid fa-pencil edit-item"></i>
-          </a>
-        </li>
-      `).join("");
-    },
+        getItemInput(){
+            return {
+                name: document.querySelector("#name").value,
+                money: document.querySelector("#money").value
+            };
+        },
 
-    addListItem(item) {
-      const li = document.createElement("li");
-      li.className = "collection-item";
-      li.id = `item-${item.id}`;
-      li.innerHTML = `
-        <strong>${item.name}</strong> : 
-        <em>${item.money} Rs</em>
-        <a href="#" class="secondary-content">
-          <i class="fa-solid fa-pencil edit-item"></i>
-        </a>
-      `;
-      document.querySelector("#item-list").appendChild(li);
-    },
+        addListItem(item){
+            const li = document.createElement("li");
+            li.className = "collection-item";
+            li.id = `item-${item.id}`;
+            li.innerHTML = `
+                <strong>${item.name}</strong> :
+                <em>${item.money} Rs</em>
+                <a href="#" class="secondary-content">
+                    <i class="fa-solid fa-pencil edit-item"></i>
+                </a>`;
+            document.querySelector("#item-list").appendChild(li);
+        },
 
-    updateListItem(item) {
-      const el = document.querySelector(`#item-${item.id}`);
-      el.innerHTML = `
-        <strong>${item.name}</strong> : 
-        <em>${item.money} Rs</em>
-        <a href="#" class="secondary-content">
-          <i class="fa-solid fa-pencil edit-item"></i>
-        </a>
-      `;
-    },
+        updateListItem(item){
+            const li = document.getElementById(`item-${item.id}`);
+            li.innerHTML = `
+                <strong>${item.name}</strong> :
+                <em>${item.money} Rs</em>
+                <a href="#" class="secondary-content">
+                    <i class="fa-solid fa-pencil edit-item"></i>
+                </a>`;
+        },
 
-    deleteListItem(id) {
-      document.querySelector(`#item-${id}`).remove();
-    },
+        deleteListItem(id){
+            const li = document.getElementById(`item-${id}`);
+            if(li) li.remove();
+        },
 
-    clearInputs() {
-      document.querySelector("#name").value = "";
-      document.querySelector("#money").value = "";
-    },
+        deleteAllUI(){
+            document.querySelector("#item-list").innerHTML = "";
+        },
 
-    showTotalMoney(total) {
-      document.querySelector(".total").innerText = total;
-    },
+        showTotalMoney(total){
+            document.querySelector(".total").innerText = total;
+        },
 
-    addItemToForm(item) {
-      document.querySelector("#name").value = item.name;
-      document.querySelector("#money").value = item.money;
-    },
+        clearInputState(){
+            document.querySelector("#name").value = "";
+            document.querySelector("#money").value = "";
+        },
 
-    showEditState() {
-      document.querySelector(".add-btn").style.display = "none";
-      document.querySelector(".update-btn").style.display = "inline";
-      document.querySelector(".delete-btn").style.display = "inline";
-      document.querySelector(".back-btn").style.display = "inline";
-    },
+        clearEditState(){
+            document.querySelector(".add-btn").style.display = "inline";
+            document.querySelector(".update-btn").style.display = "none";
+            document.querySelector(".delete-btn").style.display = "none";
+            document.querySelector(".back-btn").style.display = "none";
+        },
 
-    clearEditState() {
-      document.querySelector(".add-btn").style.display = "inline";
-      document.querySelector(".update-btn").style.display = "none";
-      document.querySelector(".delete-btn").style.display = "none";
-      document.querySelector(".back-btn").style.display = "none";
-    },
+        showEditState(){
+            document.querySelector(".add-btn").style.display = "none";
+            document.querySelector(".update-btn").style.display = "inline";
+            document.querySelector(".delete-btn").style.display = "inline";
+            document.querySelector(".back-btn").style.display = "inline";
+        },
 
-    clearList() {
-      document.querySelector("#item-list").innerHTML = "";
-    }
-  };
+        addItemToForm(){
+            const current = itemCtrl.getCurrentItem();
+            document.querySelector("#name").value = current.name;
+            document.querySelector("#money").value = current.money;
+        }
+
+    };
 
 })();
 
 
+// ---------------------------------------------------------
 // APP CONTROLLER
-const App = (() => {
+// ---------------------------------------------------------
+const App = (function(){
 
-  const loadEventListeners = () => {
-    document.querySelector(".add-btn").addEventListener("click", addItem);
-    document.querySelector("#item-list").addEventListener("click", editItem);
-    document.querySelector(".update-btn").addEventListener("click", updateItem);
-    document.querySelector(".delete-btn").addEventListener("click", deleteItem);
-    document.querySelector(".back-btn").addEventListener("click", back);
-    document.querySelector(".clear-btn").addEventListener("click", clearAll);
-  };
+    const loadEventListeners = function(){
 
-  const addItem = e => {
-    e.preventDefault();
+        document.querySelector(".add-btn").addEventListener("click", itemAddSubmit);
+        document.querySelector("#item-list").addEventListener("click", itemEditClick);
+        document.querySelector(".update-btn").addEventListener("click", itemUpdateSubmit);
+        document.querySelector(".delete-btn").addEventListener("click", itemDeleteSubmit);
+        document.querySelector(".back-btn").addEventListener("click", UICtrl.clearEditState);
 
-    const input = UICtrl.getInput();
-    if (!input.name || !input.money) return alert("Fill fields");
+        document.querySelector(".clear-btn").addEventListener("click", clearAllItems);
+    };
 
-    const newItem = itemCtrl.addItem(input.name, input.money);
-    UICtrl.addListItem(newItem);
-    UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
-    UICtrl.clearInputs();
-  };
 
-  const editItem = e => {
-    e.preventDefault();
+    const itemAddSubmit = async function(e){
+        e.preventDefault();
 
-    if (!e.target.classList.contains("edit-item")) return;
+        const input = UICtrl.getItemInput();
 
-    const id = +e.target.parentElement.parentElement.id.split("-")[1];
-    const item = itemCtrl.getItemByID(id);
+        if(input.name === "" || input.money === ""){
+            alert("Please fill the fields");
+            return;
+        }
 
-    itemCtrl.setCurrentItem(item);
-    UICtrl.addItemToForm(item);
-    UICtrl.showEditState();
-  };
+        const newItem = await itemCtrl.addItem(input.name, input.money);
 
-  const updateItem = e => {
-    e.preventDefault();
+        UICtrl.addListItem(newItem);
 
-    const input = UICtrl.getInput();
-    const updated = itemCtrl.updateItem(input.name, input.money);
+        UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
 
-    UICtrl.updateListItem(updated);
-    UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
-    UICtrl.clearInputs();
-    UICtrl.clearEditState();
-  };
+        UICtrl.clearInputState();
+    };
 
-  const deleteItem = e => {
-    e.preventDefault();
 
-    const item = itemCtrl.getCurrentItem();
-    itemCtrl.deleteItem(item.id);
-    UICtrl.deleteListItem(item.id);
-    UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
-    UICtrl.clearInputs();
-    UICtrl.clearEditState();
-  };
+    const itemEditClick = function(e){
+        if(e.target.classList.contains("edit-item")){
+            const id = e.target.parentElement.parentElement.id.split("-")[1];
+            const item = itemCtrl.getItemByID(id);
 
-  const back = e => {
-    e.preventDefault();
-    UICtrl.clearInputs();
-    UICtrl.clearEditState();
-  };
+            itemCtrl.setCurrentItem(item);
 
-  const clearAll = e => {
-    e.preventDefault();
-    itemCtrl.clearAllItems();
-    UICtrl.clearList();
-    UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
-    UICtrl.clearInputs();
-    UICtrl.clearEditState();
-  };
+            UICtrl.addItemToForm();
+            UICtrl.showEditState();
+        }
+    };
 
-  return {
-    start() {
-      UICtrl.clearEditState();
-      UICtrl.populateList(itemCtrl.getItems());
-      UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
-      loadEventListeners();
-    }
-  };
+
+    const itemUpdateSubmit = async function(e){
+        e.preventDefault();
+
+        const input = UICtrl.getItemInput();
+
+        const updated = await itemCtrl.updateItem(input.name, input.money);
+
+        UICtrl.updateListItem(updated);
+
+        UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
+
+        UICtrl.clearInputState();
+        UICtrl.clearEditState();
+    };
+
+
+    const itemDeleteSubmit = async function(e){
+        e.preventDefault();
+
+        const current = itemCtrl.getCurrentItem();
+
+        await itemCtrl.deleteItem(current.id);
+
+        UICtrl.deleteListItem(current.id);
+
+        UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
+
+        UICtrl.clearInputState();
+        UICtrl.clearEditState();
+    };
+
+
+    const clearAllItems = async function(e){
+        e.preventDefault();
+
+        await itemCtrl.clearAllItems();
+
+        UICtrl.deleteAllUI();
+        UICtrl.showTotalMoney(0);
+        UICtrl.clearInputState();
+        UICtrl.clearEditState();
+    };
+
+
+    return {
+        start: async function(){
+            UICtrl.clearEditState();
+
+            await itemCtrl.loadFromAPI();
+
+            const items = itemCtrl.getItem();
+
+            if(items.length > 0){
+                UICtrl.populateItemList(items);
+                UICtrl.showTotalMoney(itemCtrl.getTotalMoney());
+            }
+
+            loadEventListeners();
+        }
+    };
 
 })();
 
+
+// START APP
 App.start();
